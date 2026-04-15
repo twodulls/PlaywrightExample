@@ -1,0 +1,32 @@
+[
+  {
+    "name": "검증 실패 (앱 결함)",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*AssertionError.*"
+  },
+  {
+    "name": "UI 요소 미노출",
+    "matchedStatuses": ["broken"],
+    "messageRegex": ".*TimeoutError.*|.*Locator.*"
+  },
+  {
+    "name": "페이지 로딩 타임아웃",
+    "matchedStatuses": ["broken"],
+    "messageRegex": ".*Timeout.*|.*timeout.*"
+  },
+  {
+    "name": "테스트 데이터 부재",
+    "matchedStatuses": ["skipped"],
+    "messageRegex": ".*SkipException.*|.*스킵.*"
+  },
+  {
+    "name": "테스트 코드 오류",
+    "matchedStatuses": ["broken"],
+    "messageRegex": ".*NullPointerException.*|.*RuntimeException.*|.*Exception.*"
+  },
+  {
+    "name": "앱 서버 오류",
+    "matchedStatuses": ["broken"],
+    "messageRegex": ".*Navigation.*|.*net::.*|.*ERR_.*"
+  }
+]

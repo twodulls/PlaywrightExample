@@ -1,0 +1,4 @@
+url : https://www.test.com
+headlessOption : false  #true : 브라우져 구동 없이 테스트 진행, false : 브라우져 구동된 상태로 테스트 진행
+id : userID
+pw : userPassword
