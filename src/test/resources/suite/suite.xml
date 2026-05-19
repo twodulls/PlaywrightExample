@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="외식UP 사장님몰 Web UI 자동화 SmokeTest" preserve-order="true" parallel="tests" thread-count="4">
+<suite name="Product Name-Web UI 자동화 SmokeTest" preserve-order="true" parallel="tests" thread-count="4">
 
     <listeners>
         <listener class-name="com.playwright.example.listener.ScreenshotListener"/>
