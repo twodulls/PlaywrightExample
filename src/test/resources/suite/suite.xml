@@ -3,8 +3,8 @@
 <suite name="외식UP 사장님몰 Web UI 자동화 SmokeTest" preserve-order="true" parallel="tests" thread-count="4">
 
     <listeners>
-        <listener class-name="com.playwright.example.common.ScreenshotListener"/>
-        <listener class-name="com.playwright.example.common.RetryTransformer"/>
+        <listener class-name="com.playwright.example.listener.ScreenshotListener"/>
+        <listener class-name="com.playwright.example.listener.RetryAnalyzer"/>
     </listeners>
 
     <test name="로그인">

@@ -4,6 +4,7 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import com.playwright.example.listener.ScreenshotListener;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -11,15 +12,12 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class BasePage {
-
     /**
      * 변수 및 생성자
      */
     protected Page page;
-    private static final String[] GNB_TABS = {"A", "B", "C", "D"};
     public static final String[] ALERT_POPUP_TEXTS = {
-            "일시적인 오류", "네트워크 오류", "오류가 발생했습니다",
-            "주문 마감시간이 지났습니다", "이미 장바구니에 담은 상품입니다"
+            "alert text 1", "alert text 2", "alert text 3", "alert text 4"
     };
 
     public BasePage(Page page) {
@@ -90,9 +88,16 @@ public class BasePage {
     public void waitForPageLoad() {
         try {
             page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-            page.waitForLoadState(LoadState.NETWORKIDLE);
         } catch (Exception e) {
-            log.warn(">>> [BasePage] 페이지 로딩 대기 중 타임아웃 발생: {}", e.getMessage());
+            log.warn(">>> [BasePage] DOMCONTENTLOADED 대기 타임아웃: {}", e.getMessage());
+        }
+        // NETWORKIDLE은 앱이 폴링할 경우 30초 풀타임아웃이 발생할 수 있으므로
+        // 5초로 제한하고, 초과해도 무시하고 진행합니다.
+        try {
+            page.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(5000));
+        } catch (Exception e) {
+            log.debug(">>> [BasePage] NETWORKIDLE 5초 초과 (무시하고 진행): {}", e.getMessage());
         }
     }
 
@@ -135,12 +140,12 @@ public class BasePage {
     public void refreshPageByTabSwitching(String intermediateTab, String targetTab) {
         log.debug(">>> [BasePage] 데이터 갱신을 위해 탭 스위칭 수행: {} -> {}", intermediateTab, targetTab);
 
-        // 1. 중간 경유지 탭 클릭 (예: "MY")
+        // 1. 중간 경유지 탭 클릭
         // GNB 메뉴는 보통 LINK나 BUTTON이므로 텍스트로 유연하게 찾습니다.
         page.getByText(intermediateTab).first().click();
         waitForPageLoad();
 
-        // 2. 목적지 탭 클릭 (예: "AA")
+        // 2. 목적지 탭 클릭
         page.getByText(targetTab).first().click();
         waitForPageLoad();
     }
@@ -151,16 +156,6 @@ public class BasePage {
                 new Page.GetByRoleOptions().setName(tabName)
         );
         return isDisplayedWithTimeout(tabLocator, 5000);
-    }
-
-    public boolean isAllGnbTabsDisplayed() {
-        for (String tabName : GNB_TABS) {
-            if (!isGnbTabDisplayed(tabName)) {
-                log.warn(">>> [BasePage] GNB 탭 미노출: {}", tabName);
-                return false;
-            }
-        }
-        return true;
     }
 
     /**

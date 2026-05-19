@@ -60,21 +60,25 @@ public abstract class BaseTest {
         // Storage State 파일 경로 설정
         storageStatePath = Paths.get(System.getProperty("user.dir"), "build", "storage-state.json");
 
-        // 최초 1회 로그인 후 Storage State 저장
+        // Storage State 파일이 이미 존재하면 재로그인 생략 (Chrome 실행 결과 재사용)
         if (isLoginRequired()) {
-            saveStorageState();
+            if (storageStatePath.toFile().exists()) {
+                log.info(">>> [BaseTest] Storage State 파일이 이미 존재합니다. 재로그인을 생략합니다: {}", storageStatePath);
+            } else {
+                saveStorageState();
+            }
         } else {
             log.info(">>> [BaseTest] 이 테스트 클래스는 자동 로그인을 건너뜁니다.");
         }
     }
 
     @BeforeTest(alwaysRun = true)
-    public void beforeTest(ITestContext ctx) throws MalformedURLException {
+    @Parameters("browser")
+    public void beforeTest(ITestContext ctx, @Optional("chrome") String browserName) throws MalformedURLException {
         String suiteName = ctx.getCurrentXmlTest().getSuite().getName();
-        log.debug(">>> [BaseTest] suite name : {}", suiteName);
+        log.debug(">>> [BaseTest] suite name : {}, browser : {}", suiteName, browserName);
 
         playwright = Playwright.create();
-        String browserName = System.getProperty("browser", "chrome"); // 브라우저 변수 사용 (기본값: chrome)
         browser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions()
                         .setHeadless(isHeadless)
@@ -92,6 +96,10 @@ public abstract class BaseTest {
         basePage = new BasePage(page);
 
         // Allure 리포트 환경 정보
+        // allure.results.directory JVM 인자로 전달된 경로를 우선 사용 (멀티 브라우저 실행 시 각 브라우저별 경로)
+        // 지정되지 않은 경우 기본 경로 사용
+        String allureResultsDir = System.getProperty("allure.results.directory",
+                System.getProperty("user.dir") + "/build/allure-results");
         String osName = System.getProperty("os.name") + " " + System.getProperty("os.version");
         String browserVersion = browser.version();
         String browserEngine = browser.browserType().name();
@@ -106,13 +114,16 @@ public abstract class BaseTest {
                         .put("Browser Version", browserVersion)
                         .put("Viewport", VIEWPORT_WIDTH + " x " + VIEWPORT_HEIGHT)
                         .build(),
-                System.getProperty("user.dir") + "/build/allure-results/");
+                allureResultsDir + "/");
     }
 
     @BeforeClass(alwaysRun = true)
     public void globalSetup() {
         log.info(">>> [BaseTest] 공통 URL 진입: {}", testData.getUrl());
-        page.navigate(testData.getUrl());
+        // 병렬 실행 시 여러 브라우저가 동시에 navigate할 때 리소스 경합으로 타임아웃 발생 가능
+        // 기본 30초 → 60초로 상향하여 안정성 확보
+        page.navigate(testData.getUrl(),
+                new Page.NavigateOptions().setTimeout(60_000));
         page.waitForLoadState();
     }
 
@@ -143,7 +154,7 @@ public abstract class BaseTest {
             Browser tempBrowser = pw.chromium().launch(
                     new BrowserType.LaunchOptions()
                             .setHeadless(isHeadless)
-                            .setChannel("chrome"));
+                            .setChannel(System.getProperty("browser", "chrome")));
             Page tempPage = tempBrowser.newContext(
                     new Browser.NewContextOptions().setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)).newPage();
 
@@ -154,7 +165,7 @@ public abstract class BaseTest {
             loginPage.login(ID, PW);
 
             // 쿠키와 세션이 완전히 설정될때까지 대기
-            tempPage.waitForURL("**/@*/**");
+            tempPage.waitForURL("**/@*/**"); // 프랜차이즈명이 포함된 경로 (예: https://sfn-qa.oesikup.com/@donkachun/all)
             tempPage.waitForLoadState(com.microsoft.playwright.options.LoadState.NETWORKIDLE); // 네트워크 요청 완료
 
             // 로그인 완료 후, Storage State 파일경로에 쿠키와 세션 저장

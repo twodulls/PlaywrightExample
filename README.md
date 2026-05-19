@@ -25,12 +25,12 @@ TestNG를 테스트 러너로 사용하고, Allure를 통해 리포트를 생성
 
 ```
 src/test/
-├── java/org/playwright/example/
+├── java/com/playwright/example/
 │   ├── common/
 │   │   ├── BaseTest.java          # 테스트 생명주기 관리 (Suite/Test/Class/Method)
-│   │   ├── BasePage.java          # 공통 UI 액션 (클릭, 입력, 텍스트 추출 등)
-│   │   ├── RetryAnalyzer.java     # 실패 테스트 자동 재시도 (최대 2회)
-│   │   ├── RetryTransformer.java  # RetryAnalyzer를 전체 메서드에 적용
+│   │   └── BasePage.java          # 공통 UI 액션 (클릭, 입력, 텍스트 추출, 팝업 처리 등)
+│   ├── listener/
+│   │   ├── RetryAnalyzer.java     # 실패 테스트 자동 재시도 + 전체 @Test 메서드에 자동 주입
 │   │   └── ScreenshotListener.java # 실패/스킵 시 Allure 스크린샷 자동 첨부
 │   ├── page/
 │   │   └── LoginPage.java         # 로그인 페이지 POM
@@ -61,15 +61,20 @@ src/test/
 - `@BeforeSuite`에서 최초 1회 로그인 후 쿠키/세션을 `build/storage-state.json`에 저장합니다.
 - 이후 모든 테스트 클래스는 저장된 상태를 로드하여 로그인 과정을 생략합니다.
 - 로그인 테스트(`LoginTest`)는 `isLoginRequired()`를 `false`로 오버라이드하여 자동 로그인을 건너뜁니다.
+- 뷰포트 해상도는 `1440 x 900`으로 고정되어 컨텍스트 및 Allure 리포트에 모두 반영됩니다.
 
 ### 자동 재시도
-- `RetryAnalyzer`가 실패한 테스트를 최대 2회 자동 재시도합니다.
+- `RetryAnalyzer`는 `IRetryAnalyzer`와 `IAnnotationTransformer`를 함께 구현하여,
+  `suite.xml`의 listener로 등록되면 모든 `@Test` 메서드에 자동으로 적용됩니다.
+- 실패한 테스트를 최대 2회 자동 재시도합니다 (`MAX_RETRY_COUNT = 2`).
 - 재시도 전 페이지 세션 유효성을 확인하고, 화면에 남은 알림 팝업을 선제적으로 닫습니다.
 
 ### 자동 스크린샷 첨부
 - `ScreenshotListener`가 테스트 실패/스킵 시 Allure 리포트에 스크린샷을 자동으로 첨부합니다.
 - 스크린샷은 60% 크기로 리사이즈되어 저장됩니다.
-- 재시도 횟수를 포함한 이름으로 첨부됩니다 (예: `실패 스크린샷 - 2회차`).
+- 재시도 횟수와 타임스탬프를 포함한 이름으로 첨부됩니다
+  (예: `실패 스크린샷 - 2회차 [2026-05-19 14:31:05]`, 최종 실패 시 `N회차 (최종)`).
+- `BasePage.dismissAlertPopupIfPresent()`에서 오류 팝업이 감지되는 경우에도 별도 스크린샷이 첨부됩니다.
 
 ### Allure 카테고리 자동 분류
 `categories.json`에 정의된 패턴으로 실패 원인을 자동 분류합니다.

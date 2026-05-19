@@ -1,6 +1,7 @@
-package com.playwright.example.common;
+package com.playwright.example.listener;
 
 import com.microsoft.playwright.Page;
+import com.playwright.example.common.BaseTest;
 import io.qameta.allure.Allure;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.ITestListener;
@@ -44,7 +45,7 @@ public class ScreenshotListener implements ITestListener {
                 int currentRetry = retryAnalyzer.getRetryCount();
                 String retryText = (currentRetry == 0) ? "1회차" :
                         (currentRetry < RetryAnalyzer.MAX_RETRY_COUNT) ? (currentRetry + 1) + "회차" :
-                                (currentRetry + 1) + "회차 (최종)";
+                        (currentRetry + 1) + "회차 (최종)";
                 return prefix + " 스크린샷 - " + retryText;
             }
         } catch (Exception e) {
@@ -77,13 +78,13 @@ public class ScreenshotListener implements ITestListener {
     /**
      * 스크린샷 이미지를 지정된 비율로 리사이즈합니다.
      * @param originalBytes 원본 이미지 바이트 배열
-     * @param scale 축소 비율 (예: 0.3f = 30% 크기)
+     * @param scale 축소 비율 (예: 0.6f = 60% 크기)
      * @return 리사이즈된 이미지 바이트 배열
      */
     public static byte[] resizeScreenshot(byte[] originalBytes, float scale) {
         try {
             java.awt.image.BufferedImage original = javax.imageio.ImageIO.read(
-                    new ByteArrayInputStream(originalBytes));
+                    new java.io.ByteArrayInputStream(originalBytes));
             int newWidth = (int) (original.getWidth() * scale);
             int newHeight = (int) (original.getHeight() * scale);
 
@@ -99,7 +100,7 @@ public class ScreenshotListener implements ITestListener {
             javax.imageio.ImageIO.write(resized, "png", out);
             return out.toByteArray();
         } catch (Exception e) {
-            return originalBytes; // 리사이즈 실패 시 원본 반환
+            return originalBytes;
         }
     }
 }

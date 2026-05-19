@@ -14,11 +14,10 @@ import org.testng.annotations.Test;
 
 import static io.qameta.allure.Allure.step;
 
-@Epic("외식Up 사장님몰 Web Smoke Test")
+@Epic("Product Name-Web Smoke Test")
 @Feature("로그인")
 @Slf4j
 public class LoginTest extends BaseTest {
-
     private LoginPage loginPage;
     private SoftAssertions sa;
 
@@ -65,6 +64,7 @@ public class LoginTest extends BaseTest {
 
         step("[When] 유효한 계정으로 로그인 시도 (아이디: '" + ID + "')");
         loginPage.login(ID, PW);
+
 
         sa.assertAll();
     }
