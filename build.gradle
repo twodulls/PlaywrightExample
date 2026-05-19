@@ -5,7 +5,7 @@ plugins {
     id 'io.freefair.lombok' version '9.0.0'
 }
 
-group = 'com.playwright'
+group = 'com.example'
 version = '1.0-SNAPSHOT'
 
 def allureVersion = "2.24.0"
@@ -15,6 +15,10 @@ compileTestJava.options.encoding = "UTF-8"
 
 repositories {
     mavenCentral()
+}
+
+configurations {
+    allureCommandline
 }
 
 java {
@@ -29,6 +33,13 @@ allure{
     version = allureVersion
     useTestNG{
         version = allureVersion
+    }
+    adapter {
+        frameworks {
+            testng {
+                adapterVersion = allureVersion
+            }
+        }
     }
 }
 
@@ -47,6 +58,7 @@ dependencies {
     testImplementation 'org.awaitility:awaitility:4.3.0'
     implementation 'org.apache.commons:commons-lang3:3.20.0'
     implementation 'com.microsoft.playwright:playwright:1.58.0'
+    allureCommandline "io.qameta.allure:allure-commandline:${allureVersion}"
 }
 
 // Usage: ./gradlew playwright --args="help"
@@ -136,9 +148,10 @@ test.dependsOn('cleanAllureResults')
 
 test {
     systemProperty 'env', System.properties['env'] ?: "${env}"
+    systemProperties System.getProperties() // -Dbrowser 등 커맨드라인 프로퍼티 전달
     useTestNG(){
         if(project.hasProperty("smoke_test")){
-            suites 'src/test/resources/suite/suite.xml'
+            suites 'src/test/resources/suite/chrome-suite.xml'
         }
         options.parallel = 'tests'
         options.threadCount = 4
@@ -150,5 +163,150 @@ test {
         showStackTraces = true
         exceptionFormat = 'full'
         events "PASSED", "FAILED", "SKIPPED"
+    }
+}
+
+// ════════════════════════════════════════════════════
+//  멀티 브라우저 테스트 (Chrome → Edge 순차 실행)
+//  실행: ./gradlew multiBrowserTest --continue
+// ════════════════════════════════════════════════════
+
+// 1. 브라우저별 allure-results 초기화 태스크
+['chrome', 'edge'].each { browser ->
+    tasks.register("cleanAllureResults_${browser}") {
+        doLast {
+            def resultsDir = layout.buildDirectory.dir("allure-results-${browser}").get().asFile
+            def backupDir = layout.buildDirectory.dir("allure-history-backup-${browser}").get().asFile
+
+            if (new File(resultsDir, "history").exists()) {
+                copy {
+                    from new File(resultsDir, "history")
+                    into backupDir
+                }
+            }
+
+            delete resultsDir
+            resultsDir.mkdirs()
+
+            if (backupDir.exists()) {
+                copy {
+                    from backupDir
+                    into new File(resultsDir, "history")
+                }
+                delete backupDir // 백업 폴더 정리
+            }
+
+            def categoriesFile = file("src/test/resources/categories.json")
+            if (categoriesFile.exists()) copy { from categoriesFile; into resultsDir }
+            def propsFile = file("src/test/resources/allure.properties")
+            if (propsFile.exists()) copy { from propsFile; into resultsDir }
+        }
+    }
+}
+
+// 2. Chrome 테스트 태스크
+tasks.register('testChrome', Test) {
+    group = 'verification'
+    dependsOn 'cleanAllureResults_chrome'
+    outputs.upToDateWhen { false }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useTestNG {
+        suites 'src/test/resources/suite/chrome-suite.xml'
+        options.parallel = 'tests'
+        options.threadCount = 4
+    }
+
+    jvmArgs "-Dallure.results.directory=${layout.buildDirectory.dir('allure-results-chrome').get().asFile.absolutePath}"
+
+    systemProperty 'env', System.properties['env'] ?: "${env}"
+    systemProperties System.getProperties()
+    ignoreFailures = true
+
+    doFirst {
+        logger.lifecycle(">>> [Chrome] 테스트 프로세스 시작 (XML: src/test/resources/suite/chrome-suite.xml)")
+    }
+}
+
+// 3. Edge 테스트 태스크
+tasks.register('testEdge', Test) {
+    group = 'verification'
+    dependsOn 'cleanAllureResults_edge'
+    outputs.upToDateWhen { false }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useTestNG {
+        suites 'src/test/resources/suite/edge-suite.xml'
+        options.parallel = 'tests'
+        options.threadCount = 4
+    }
+
+    jvmArgs "-Dallure.results.directory=${layout.buildDirectory.dir('allure-results-edge').get().asFile.absolutePath}"
+
+    systemProperty 'env', System.properties['env'] ?: "${env}"
+    systemProperties System.getProperties()
+    ignoreFailures = true
+
+    doFirst {
+        logger.lifecycle(">>> [Edge] 테스트 프로세스 시작 (XML: src/test/resources/suite/edge-suite.xml)")
+    }
+}
+
+// 4. 브라우저별 Allure 리포트 생성 태스크 (JavaExec)
+['chrome', 'edge'].each { browser ->
+    tasks.register("allureReport_${browser}", JavaExec) {
+        group = 'verification'
+        classpath = configurations.allureCommandline
+        mainClass = 'io.qameta.allure.CommandLine'
+
+        doFirst {
+            def reportDate = new Date().format('yyyy-MM-dd_HH-mm')
+            def resultsDir = layout.buildDirectory.dir("allure-results-${browser}").get().asFile
+            def reportDir  = layout.buildDirectory.dir("reports/allure-report/${browser}-${reportDate}").get().asFile
+
+            setArgs(['generate', '--clean', '--output', reportDir.absolutePath, resultsDir.absolutePath])
+            ext.reportDirPath  = reportDir.absolutePath
+            ext.resultsDirPath = resultsDir.absolutePath
+        }
+
+        doLast {
+            def reportDir  = new File(ext.reportDirPath as String)
+            def resultsDir = new File(ext.resultsDirPath as String)
+            def historySource = new File(reportDir, "history")
+            def historyDest = new File(resultsDir, "history")
+
+            if (historySource.exists()) {
+                // stale 파일 방지를 위해 기존 history 폴더를 삭제 후 새로 복사
+                if (historyDest.exists()) delete historyDest
+                copy {
+                    from historySource
+                    into historyDest
+                }
+                logger.lifecycle(">>> [Allure] ${browser} Trend 누적을 위해 history를 results 폴더로 복사했습니다.")
+            }
+            logger.lifecycle(">>> [Allure] ${browser} 리포트 생성 완료: ${reportDir.absolutePath}")
+        }
+    }
+}
+
+// 5. [중요] 태스크 실행 순서 강제 지정 (태스크들이 모두 등록된 후 설정)
+afterEvaluate {
+    tasks.named('allureReport_chrome') { mustRunAfter 'testChrome' }
+    tasks.named('testEdge') { mustRunAfter 'testChrome', 'allureReport_chrome' }
+    tasks.named('allureReport_edge') { mustRunAfter 'testEdge' }
+}
+
+// 6. 멀티 브라우저 통합 태스크
+tasks.register('multiBrowserTest') {
+    group = 'verification'
+    description = 'Chrome → Chrome Report → Edge → Edge Report 순차 실행'
+
+    // 명시적으로 모든 테스트와 리포트 태스크를 실행 목록에 넣습니다.
+    dependsOn 'testChrome', 'allureReport_chrome', 'testEdge', 'allureReport_edge'
+
+    doLast {
+        logger.lifecycle(">>> [멀티 브라우저] 모든 테스트 및 리포트 공정이 완료되었습니다.")
     }
 }
